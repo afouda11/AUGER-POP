@@ -6,9 +6,9 @@ import matplotlib.gridspec as gridspec
 import os
 import augerpop.utils as ut
 
-def auger_run(steps, core_orb, ras_nas, initial_states, atom_col, min_mo_init, 
+def auger_run(steps, core_orb, initial_states, atom_col, min_mo_init, 
 			  lumo_index_init, min_mo_final, lumo_index_final, final_state_spin,
-			  GE, E, E_shift, dofit, norm=None, fwhm=None, prev_step=None):
+			  CI, GE, E, E_shift, dofit, norm=None, fwhm=None, prev_step=None):
 
 	for i,ival in enumerate(steps):
 
@@ -24,8 +24,9 @@ def auger_run(steps, core_orb, ras_nas, initial_states, atom_col, min_mo_init,
 		for j,jval in enumerate(core_orb):
 
 			T[jval], roots = ut.auger_calc("inputs/CI_vecs_"+str(jval)+"_"+str(ival),
-			"inputs/mull_pops_"+str(jval)+"_"+str(ival)+".txt", jval, ival, ras_nas[i], initial_states[i],
-			atom_col[j],min_mo_init[i], lumo_index_init[i], min_mo_final[i], lumo_index_final[i], final_state_spin)    
+			"inputs/mull_pops_"+str(jval)+"_"+str(ival)+".txt", jval, ival, initial_states[i],
+			atom_col[j],min_mo_init[i], lumo_index_init[i], min_mo_final[i], lumo_index_final[i], final_state_spin[i],
+			CI[i])    
 
 			for n in range(initial_states[i]):
 				np.savetxt("outputs/T_"+str(jval)+"_"+str(ival)+"_spec_"+str(i)+".txt",T[jval][n])
