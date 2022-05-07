@@ -3,7 +3,9 @@ from io import StringIO
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
-import multiprocessing as mp
+import multiprocessing
+import itertools
+from functools import partial	
 
 def split(word):
     return [char for char in word]
@@ -11,37 +13,40 @@ def split(word):
 def gaussian1D(yo,xo,x,d):
     return yo * (np.exp(-1 * (((x - xo) / d) ** 2)))
 
-def pool_func(x, y, xbase, sig):
-	return gaussian1D(x, y, xbase, sig) 
-
-# def pool_func(*args):
-# 	return gaussian1D(args[0], args[1], args[2], args[3])
-
 def linefit(x, y, fwhm, norm):
     
 	sig = fwhm / (2 * np.sqrt(2*np.log(2)))
-	xmin  = int(x.min())-3
-	xmax  = int(x.max())+3
+	xmin  = int(x.min())-1
+	xmax  = int(x.max())+1
 	#xmin  = int(x.min())
 	#xmax  = int(x.max())
 	xbase = np.linspace(xmin, xmax, 1001)
 #print(xbase)
 	yfit  = np.zeros(len(xbase))
 	for i,val in enumerate(y):
-		yfit += gaussian1D(val, x[i], xbase, sig) 
+		yfit += gaussian1D(val, x[i], xbase, sig[i]) 
 	if norm == True:
 		yfit = yfit / yfit.max()
 	return np.column_stack((xbase, yfit))
 
-def ci_vec_read(civec_file_name, final_initial, CI):
-	if final_initial == "final":
-		civec_file = open(str(civec_file_name)+"_final.txt", 'r')
-	if final_initial == "initial":
-		civec_file  = open(str(civec_file_name)+"_init.txt", 'r')
-	lines = civec_file.readlines()
+def ci_vec_read(civec_file_name, final_init, CI, log_lines, n_states):
+
+	CI_start_index = []
+	CI_end_index   = []
+	for index,line in enumerate(log_lines):
+		if "has been made, which may change the order of the CSFs." in line:
+			CI_start_index.append(index+2)
+		if "Natural orbitals and occupation numbers for root  1" in line:
+			CI_end_index.append(index)
+
 	index_vec = []
 	root_vec = []
 	count = 0
+	if final_init == "init":#no intial state selectivity, need to edit log file
+		lines = log_lines[CI_start_index[1]:CI_end_index[1]]
+	if final_init == "final":
+		lines = log_lines[CI_start_index[2]:CI_end_index[2]]
+
 	for index,line in enumerate(lines):
 		if 'printout of CI-coefficients larger than' in line:
 			index_vec.append(index)
@@ -66,84 +71,119 @@ def ci_vec_read(civec_file_name, final_initial, CI):
 	return csf, civec, root_vec
 	
 
-def auger_calc(civec_file_name, mullpop_file_name, hole, step, n_init_states, atom_col, min_mo_init,
-lumo_index_init, min_mo_final, lumo_index_final, final_state_spin, CI):
+def auger_calc(civec_file_name, mullpop_file_name, hole, step, n_init_states, n_final_states, atom_col, min_mo_init,
+lumo_index_init, min_mo_final, lumo_index_final, final_state_spin, CI, diag, nprocs):
 
-	csf_final, civec_final, root_vec_final = ci_vec_read(civec_file_name, "final", CI)
-	csf_init,  civec_init,  root_vec_init  = ci_vec_read(civec_file_name, "initial", CI)
+	log_file = open("inputs/"+str(hole)+"_"+str(step)+".log", 'r')
+	log_lines = log_file.readlines()
+
+	csf_init,  civec_init,  root_vec_init  = ci_vec_read(civec_file_name, "init",  CI, log_lines, n_init_states)
+	csf_final, civec_final, root_vec_final = ci_vec_read(civec_file_name, "final", CI, log_lines, n_final_states)
 	
 	mull_pop_file = open(mullpop_file_name, 'r')
 	lines = mull_pop_file.readlines()   
 	pop_list = []
 	for index,line in enumerate(lines):
-		if "Total   " in line or "total   " in line:
-			c = StringIO(line)
-			pop_list.append(np.loadtxt(c, usecols = atom_col))
+		if "Charges per occupied MO" in line:
+			grid_it = index	
+	for index,line in enumerate(lines[grid_it:]):
+			if "Mulliken charges per centre" in line:#core-hole atom has to be in the first 12 in the xyz
+				total_mo_line = lines[grid_it+index+4]
+				c = StringIO(total_mo_line)
+				pop_list.append(np.loadtxt(c, usecols = atom_col))
 	if step == "teoe":
 		for i,val in enumerate(pop_list):
 			pop_list[i] = pop_list[i][0] + pop_list[i][1]
 	mull_pop  = np.hsplit(np.array(pop_list),n_init_states)
 
-	I = {}
-	for n in range(n_init_states):
-		I[n] = np.zeros(len(csf_final))
+	paramlist = list(itertools.product(range(n_init_states),range(len(csf_final))))
+	print(step)
+	print(hole)
+	#print(paramlist)
+	pool = multiprocessing.Pool(nprocs)
+	funcpool = partial(intensity_cal, n_init_states, csf_init, csf_final, min_mo_init, lumo_index_init, min_mo_final,
+	final_state_spin, mull_pop, civec_init, civec_final, diag)
 
+	I = pool.map(funcpool,paramlist)
+	I_dict = {}
+	index = 0
 	for n in range(n_init_states):
+		I_dict[n] = np.zeros(len(csf_final))
 		for i in range(len(csf_final)):
-			t = []
-			C = []
-			for m in range(len(csf_init[n])):
-				orbs_init = split(csf_init[n][m])
-				for j in range(len(csf_final[i])):
-					orbs_final = split(csf_final[i][j])
-					wv = []
-					count = 0
-					for k,orb_init in enumerate(orbs_init[min_mo_init:lumo_index_init+1]):
+			I_dict[n][i] = I[index]
+			index += 1
 
-						if orb_init != orbs_final[k+min_mo_final]:
-				
-							if orb_init == "2" and (orbs_final[k+min_mo_final] == "u" or orbs_final[k+min_mo_final] == "d"):
-								wv.append(k)
-								count += 1
-							if orb_init == "2" and orbs_final[k+min_mo_final] == "0":
-								wv.append(k) 
-								count =3
-							if (orb_init == "u" or orb_init == "d") and orbs_final[k+min_mo_final] == "0":
-								wv.append(k)
-								count += 1
-							#if the number electrons increases then we ignore it
-							if (orb_init == "u" or orb_init == "d") and orbs_final[k+min_mo_final] == "2":
-								count=5
-							if (orb_init == "0") and (orbs_final[k+min_mo_final] == "u" or orbs_final[k+min_mo_final] == "d"):
-								count=5
-							if (orb_init == "0") and orbs_final[k+min_mo_final] == "2":
-								count=5
-						else:
-							continue
-					if count == 2:
-					#w != v
-						if final_state_spin[i] == "s": 
-							t.append(np.sqrt(0.5) * (mull_pop[n][wv[0]] + mull_pop[n][wv[1]]))
-						if final_state_spin[i] == "d":
-							t.append(np.sqrt(0.5) * (mull_pop[n][wv[0]] + mull_pop[n][wv[1]]))
-							#t.append(np.sqrt(1.5) * (mull_pop[n][wv[0]] - mull_pop[n][wv[1]]))
-						if final_state_spin[i] == "t":
-							t.append(np.sqrt(1.5) * (mull_pop[n][wv[0]] - mull_pop[n][wv[1]]))
-						C.append(civec_final[i][j] * civec_init[n][m])
-					if count == 3:
-					#w = v
-						t.append(mull_pop[n][wv[0]])
-						C.append(civec_final[i][j] * civec_init[n][m])
-					#not valid
-					if count == 5:
-						continue
+	#print(I)
 
-			for diag in range(len(t)):
- 				I[n][i] += ( np.absolute(t[diag]) * np.absolute(C[diag]) )
-# 				I[n][i] += (( np.absolute(t[diag])**2 ) * ( np.absolute(C[diag]) ** 2))
-# 				for offdiag in range(len(t)):
-# 					I[n][i] += ((t[diag]*t[offdiag]) * (C[diag]*C[offdiag]))
+	return I_dict, root_vec_final
 
-			I[n][i] =  (2 * np.pi * (I[n][i]**2))
+#def intensity_cal(n_init_states, csf_init, csf_final, min_mo_init, lumo_index_init, min_mo_final, final_state_spin,mull_pop, civec_init, civec_final, DIAG, n, i):
+def intensity_cal(n_init_states, csf_init, csf_final, min_mo_init, lumo_index_init, min_mo_final, final_state_spin,mull_pop, civec_init, civec_final, DIAG, params):
 
-	return I, root_vec_final
+	n = params[0]
+	i = params[1]
+	Ini = 0.0
+	t = []
+	C = []
+	for m in range(len(csf_init[n])):
+		orbs_init = split(csf_init[n][m])
+		for j in range(len(csf_final[i])):
+			orbs_final = split(csf_final[i][j])
+			wv = []
+			count = 0
+			for k,orb_init in enumerate(orbs_init[min_mo_init:lumo_index_init+1]):
+
+				if orb_init != orbs_final[k+min_mo_final]:
+		
+					if orb_init == "2" and (orbs_final[k+min_mo_final] == "u" or orbs_final[k+min_mo_final] == "d"):
+						wv.append(k)
+						count += 1
+					if orb_init == "2" and orbs_final[k+min_mo_final] == "0":
+						wv.append(k) 
+						count =3
+					if (orb_init == "u" or orb_init == "d") and orbs_final[k+min_mo_final] == "0":
+						wv.append(k)
+						count += 1
+					#if the number electrons increases then we ignore it
+					if (orb_init == "u" or orb_init == "d") and orbs_final[k+min_mo_final] == "2":
+						count=5
+					if (orb_init == "0") and (orbs_final[k+min_mo_final] == "u" or orbs_final[k+min_mo_final] == "d"):
+						count=5
+					if (orb_init == "0") and orbs_final[k+min_mo_final] == "2":
+						count=5
+				else:
+					continue
+			if count == 2:
+			#w != v
+				if final_state_spin[i] == "s": 
+					t.append(np.sqrt(0.5) * (mull_pop[n][wv[0]] + mull_pop[n][wv[1]]))
+				if final_state_spin[i] == "d":
+					t.append(np.sqrt(0.5) * (mull_pop[n][wv[0]] + mull_pop[n][wv[1]]))
+					#t.append(np.sqrt(1.5) * (mull_pop[n][wv[0]] - mull_pop[n][wv[1]]))
+				if final_state_spin[i] == "t":
+					t.append(np.sqrt(1.5) * (mull_pop[n][wv[0]] - mull_pop[n][wv[1]]))
+				C.append(civec_final[i][j] * civec_init[n][m])
+			if count == 3:
+			#w = v
+				t.append(mull_pop[n][wv[0]])
+				C.append(civec_final[i][j] * civec_init[n][m])
+			#not valid
+			if count == 5:
+				continue
+
+	if DIAG == True:	
+		for diag in range(len(t)):
+			Ini += (( np.absolute(t[diag])**2 ) * ( np.absolute(C[diag]) ** 2))
+# 			for offdiag in range(len(t)):
+# 				Ini += ((t[diag]*t[offdiag]) * (C[diag]*C[offdiag]))
+
+		Ini =  (2 * np.pi * (Ini))
+	
+	if DIAG == False:
+		for diag in range(len(t)):
+ 			Ini += ( np.absolute(t[diag]) * np.absolute(C[diag]) )
+
+		Ini =  (2 * np.pi * (Ini**2))
+
+	return Ini
+
