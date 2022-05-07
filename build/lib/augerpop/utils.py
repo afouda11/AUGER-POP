@@ -71,8 +71,9 @@ def ci_vec_read(civec_file_name, final_init, CI, log_lines, n_states):
 	return csf, civec, root_vec
 	
 
-def auger_calc(civec_file_name, mullpop_file_name, hole, step, n_init_states, n_final_states, atom_col, min_mo_init,
-lumo_index_init, min_mo_final, lumo_index_final, final_state_spin, CI, diag, nprocs):
+def auger_calc(civec_file_name, mullpop_file_name, hole, step, n_init_states, n_final_states, 
+			   atom_col, min_mo_init, max_mo_init, min_mo_final, final_state_spin, 
+			   CI, diag, nprocs):
 
 	log_file = open("inputs/"+str(hole)+"_"+str(step)+".log", 'r')
 	log_lines = log_file.readlines()
@@ -99,10 +100,9 @@ lumo_index_init, min_mo_final, lumo_index_final, final_state_spin, CI, diag, npr
 	paramlist = list(itertools.product(range(n_init_states),range(len(csf_final))))
 	print(step)
 	print(hole)
-	#print(paramlist)
 	pool = multiprocessing.Pool(nprocs)
-	funcpool = partial(intensity_cal, n_init_states, csf_init, csf_final, min_mo_init, lumo_index_init, min_mo_final,
-	final_state_spin, mull_pop, civec_init, civec_final, diag)
+	funcpool = partial(intensity_cal, n_init_states, csf_init, csf_final, min_mo_init, min_mo_init, min_mo_final,
+					   final_state_spin, mull_pop, civec_init, civec_final, diag)
 
 	I = pool.map(funcpool,paramlist)
 	I_dict = {}
@@ -117,8 +117,8 @@ lumo_index_init, min_mo_final, lumo_index_final, final_state_spin, CI, diag, npr
 
 	return I_dict, root_vec_final
 
-#def intensity_cal(n_init_states, csf_init, csf_final, min_mo_init, lumo_index_init, min_mo_final, final_state_spin,mull_pop, civec_init, civec_final, DIAG, n, i):
-def intensity_cal(n_init_states, csf_init, csf_final, min_mo_init, lumo_index_init, min_mo_final, final_state_spin,mull_pop, civec_init, civec_final, DIAG, params):
+def intensity_cal(n_init_states, csf_init, csf_final, min_mo_init, max_mo_init, min_mo_final, 
+				  final_state_spin,mull_pop, civec_init, civec_final, DIAG, params):
 
 	n = params[0]
 	i = params[1]
@@ -131,7 +131,7 @@ def intensity_cal(n_init_states, csf_init, csf_final, min_mo_init, lumo_index_in
 			orbs_final = split(csf_final[i][j])
 			wv = []
 			count = 0
-			for k,orb_init in enumerate(orbs_init[min_mo_init:lumo_index_init+1]):
+			for k,orb_init in enumerate(orbs_init[min_mo_init:max_mo_init+1]):
 
 				if orb_init != orbs_final[k+min_mo_final]:
 		

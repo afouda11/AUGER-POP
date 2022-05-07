@@ -6,7 +6,11 @@ import matplotlib.gridspec as gridspec
 import os
 import augerpop.utils as ut
 
-def auger_run(steps, core_orb, initial_states, initial_index, final_states, atom_col, min_mo_init, lumo_index_init, min_mo_final, lumo_index_final, final_state_spin, CI, E, DIAG, e_type, E_shift=0.0, dofit=True, norm=None, fwhm=None, prev_step=None, nprocs=1):
+def auger_run(steps, core_orb, initial_states, initial_index, 
+			  final_states, atom_col, min_mo_init, max_mo_init,
+			  min_mo_final, final_state_spin, CI, E, DIAG, e_type, 
+			  E_shift=0.0, dofit=True, norm=None, fwhm=None, 
+			  prev_step=None, nprocs=1):
 
 	for i,ival in enumerate(steps):
 
@@ -29,7 +33,8 @@ def auger_run(steps, core_orb, initial_states, initial_index, final_states, atom
 
 			T[jval], roots = ut.auger_calc("inputs/CI_vecs_"+str(jval)+"_"+str(ival),
 			"inputs/"+str(jval)+"_"+str(ival)+"_mull_pop.log", jval, ival, initial_states[i][j], final_states[i][j],
-			atom_col[i][j],min_mo_init[i][j], lumo_index_init[i][j], min_mo_final[i][j], lumo_index_final[i][j],final_state_spin[i][j], CI[i][j], DIAG[i][j], nprocs)    
+			atom_col[i][j],min_mo_init[i][j], max_mo_init[i][j], min_mo_final[i][j], final_state_spin[i][j], 
+		  	CI[i][j], DIAG[i][j], nprocs)    
 
 			for n in range(initial_states[i][j]):
 				np.savetxt("outputs/amplitudes/T_"+str(jval)+"_"+str(ival)+"_spec_"+str(n)+".txt",T[jval][n])
