@@ -29,7 +29,7 @@ def linefit(x, y, fwhm, norm):
 		yfit = yfit / yfit.max()
 	return np.column_stack((xbase, yfit))
 
-def ci_vec_read(final_init, CI, log_lines, n_states):
+def ci_vec_read(final_init, log_lines, n_states):
 
 	CI_start_index = []
 	CI_end_index   = []
@@ -63,23 +63,20 @@ def ci_vec_read(final_init, CI, log_lines, n_states):
 		csf[n]   = []
 		for i in range(val+3,val+length_vec[n]-1):      
 			c = StringIO(lines[i])
-			if CI == "coef":
-				civec[n].append(np.loadtxt(c, usecols = 2))
-			if CI == "weight":
-				civec[n].append(np.loadtxt(c, usecols = 3))
+			civec[n].append(np.loadtxt(c, usecols = 2))
 			csf[n].append(lines[i].split()[1])
 	return csf, civec, root_vec
 	
 
 def auger_calc(name, hole, n_init_states, n_final_states, 
 			   atom_col, n_core_init, n_core_final, final_state_spin, 
-			   CI, diag, mull_print_long, nprocs):
+			   diag, mull_print_long, nprocs):
 
 	log_file = open("inputs/"+str(hole)+"_"+str(name)+".log", 'r')
 	log_lines = log_file.readlines()
 
-	csf_init,  civec_init,  root_vec_init  = ci_vec_read("init",  CI, log_lines, n_init_states)
-	csf_final, civec_final, root_vec_final = ci_vec_read("final", CI, log_lines, n_final_states)
+	csf_init,  civec_init,  root_vec_init  = ci_vec_read("init",  log_lines, n_init_states)
+	csf_final, civec_final, root_vec_final = ci_vec_read("final", log_lines, n_final_states)
 	
 # 	mull_pop_file = open(mullpop_file_name, 'r')
 # 	lines = mull_pop_file.readlines()   

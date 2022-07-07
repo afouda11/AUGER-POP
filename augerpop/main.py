@@ -17,7 +17,6 @@ def auger_run(ar_options):
 	n_core_init      = ar_options["n_core_init"] 
 	n_core_final     = ar_options["n_core_final"] 
 	final_state_spin = ar_options["final_state_spin"]
-	CI 				 = ar_options["CI"]
 	DIAG 			 = ar_options["DIAG"]
 	mull_print_long  = ar_options["mull_print_long"]
 	e_type 			 = ar_options["e_type"]
@@ -51,8 +50,8 @@ def auger_run(ar_options):
 			print(ival)
 			print(jval)
 			T[jval], roots = ut.auger_calc(ival, jval, initial_states[i][j], final_states[i][j],
-			atom_col[i][j], n_core_init[i][j], n_core_final[i][j], final_state_spin[i][j], CI[i][j], 
-			DIAG[i][j], mull_print_long[i][j], nprocs)    
+			atom_col[i][j], n_core_init[i][j], n_core_final[i][j], final_state_spin[i][j], DIAG[i][j], 
+			mull_print_long[i][j], nprocs)    
 
 			for n in range(initial_states[i][j]):
 				np.savetxt("outputs/amplitudes/T_"+str(jval)+"_"+str(ival)+"_spec_"+str(n)+".txt",T[jval][n])
@@ -145,11 +144,13 @@ def get_energies(ival, jval, ground_init_final, e_type, inital_index=None, initi
 
 	E = []
 	if ground_init_final == "ground":
-		E_line = lines[E_line_index[0]+1]
-		c = StringIO(E_line)
 		if e_type == "raspt2":
+			E_line = lines[E_line_index[0]+1]
+			c = StringIO(E_line)
 			E = np.loadtxt(c, usecols = 6)
 		if e_type == "rasscf":
+			E_line = lines[E_line_index[0]+3]
+			c = StringIO(E_line)
 			E = np.loadtxt(c, usecols = 7)
 
 # 	if ground_init_final == "init":
@@ -174,33 +175,45 @@ def get_energies(ival, jval, ground_init_final, e_type, inital_index=None, initi
 # 		E = np.array(E, ndmin=1)
 	if ground_init_final == "init":
 		for i,val in enumerate(inital_index):
-			E_line = lines[E_line_index[1]+1+val]
-			c = StringIO(E_line)
 			if i < 99:
 				if e_type == "raspt2":
+					E_line = lines[E_line_index[1]+1+val]
+					c = StringIO(E_line)
 					E.append(np.loadtxt(c, usecols = 6))
 				if e_type == "rasscf":
+					E_line = lines[E_line_index[1]+3+val]
+					c = StringIO(E_line)
 					E.append(np.loadtxt(c, usecols = 7))
 			if i >= 99: 
 				if e_type == "raspt2":
+					E_line = lines[E_line_index[1]+1+val]
+					c = StringIO(E_line)
 					E.append(np.loadtxt(c, usecols = 5))
 				if e_type == "rasscf":
+					E_line = lines[E_line_index[1]+3+val]
+					c = StringIO(E_line)
 					E.append(np.loadtxt(c, usecols = 6))
 		E = np.array(E, ndmin=1)
 
 	if ground_init_final == "final":
 		for i in range(final_states):
-			E_line = lines[E_line_index[2]+1+i]
-			c = StringIO(E_line)
 			if i < 99:
 				if e_type == "raspt2":
+					E_line = lines[E_line_index[2]+1+i]
+					c = StringIO(E_line)
 					E.append(np.loadtxt(c, usecols = 6))
 				if e_type == "rasscf":
+					E_line = lines[E_line_index[2]+3+i]
+					c = StringIO(E_line)
 					E.append(np.loadtxt(c, usecols = 7))
 			if i >= 99: 
 				if e_type == "raspt2":
+					E_line = lines[E_line_index[2]+1+i]
+					c = StringIO(E_line)
 					E.append(np.loadtxt(c, usecols = 5))
 				if e_type == "rasscf":
+					E_line = lines[E_line_index[2]+3+i]
+					c = StringIO(E_line)
 					E.append(np.loadtxt(c, usecols = 6))
 		E = np.array(E)
 	return E
