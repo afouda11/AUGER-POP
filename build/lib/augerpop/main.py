@@ -6,13 +6,31 @@ import matplotlib.gridspec as gridspec
 import os
 import augerpop.utils as ut
 
-def auger_run(steps, core_orb, initial_states, initial_index, 
-			  final_states, atom_col, min_mo_init, max_mo_init,
-			  min_mo_final, final_state_spin, CI, E, DIAG, e_type, 
-			  E_shift=0.0, dofit=True, norm=None, fwhm=None, 
-			  prev_step=None, nprocs=1):
+def auger_run(ar_options):
 
-	for i,ival in enumerate(steps):
+	names 	 		 = ar_options["names"]
+	core_orb 		 = ar_options["core_orb"]
+	initial_states 	 = ar_options["initial_states"] 
+	initial_index  	 = ar_options["initial_index"]
+	final_states     = ar_options["final_states"] 
+	atom_col         = ar_options["atom_col"]
+	n_core_init      = ar_options["n_core_init"] 
+	n_core_final     = ar_options["n_core_final"] 
+	final_state_spin = ar_options["final_state_spin"]
+	CI 				 = ar_options["CI"]
+	DIAG 			 = ar_options["DIAG"]
+	mull_print_long  = ar_options["mull_print_long"]
+	e_type 			 = ar_options["e_type"]
+	E_shift 		 = ar_options["E_shift"]
+	norm 			 = ar_options["norm"]
+	fwhm 			 = ar_options["fwhm"]
+	prev_step 		 = ar_options["prev_step"]
+	n_prev_step 	 = ar_options["n_prev_step"]
+	E 				 = ar_options["E"]
+	dofit 			 = ar_options["dofit"]
+	nprocs 			 = ar_options["nprocs"]
+
+	for i,ival in enumerate(names):
 
 		E_init     = dict.fromkeys(core_orb, [])
 		E_final    = dict.fromkeys(core_orb, []) 
@@ -30,40 +48,61 @@ def auger_run(steps, core_orb, initial_states, initial_index,
 			os.mkdir(str(cwd)+"/outputs/roots")
 
 		for j,jval in enumerate(core_orb):
-
-			T[jval], roots = ut.auger_calc("inputs/CI_vecs_"+str(jval)+"_"+str(ival),
-			"inputs/"+str(jval)+"_"+str(ival)+"_mull_pop.log", jval, ival, initial_states[i][j], final_states[i][j],
-			atom_col[i][j],min_mo_init[i][j], max_mo_init[i][j], min_mo_final[i][j], final_state_spin[i][j], 
-		  	CI[i][j], DIAG[i][j], nprocs)    
+			print(ival)
+			print(jval)
+			T[jval], roots = ut.auger_calc(ival, jval, initial_states[i][j], final_states[i][j],
+			atom_col[i][j], n_core_init[i][j], n_core_final[i][j], final_state_spin[i][j], CI[i][j], 
+			DIAG[i][j], mull_print_long[i][j], nprocs)    
 
 			for n in range(initial_states[i][j]):
 				np.savetxt("outputs/amplitudes/T_"+str(jval)+"_"+str(ival)+"_spec_"+str(n)+".txt",T[jval][n])
 			np.savetxt("outputs/roots/root_"+str(ival)+"_spec.txt",roots)
 
 			if prev_step[i][j] != None: # normalize each dch_2 to the dch_1 intensities	
-				T_prev = np.loadtxt("outputs/amplitudes/T_"+str(jval)+"_"+str(prev_step[i][j])+"_spec_"+str(0)+".txt")
+				T_prev = np.loadtxt("outputs/amplitudes/T_"+str(prev_step[i][j])+"_spec_"+str(0)+".txt")
 				for n in range(initial_states[i][j]):
-					print(n)
+#					print(n)
 					Norm = np.sum(T[jval][n]) / T_prev[n]
 					T[jval][n] /= Norm
+					T[jval][n] *= n_prev_step[i][j] #currently just uses the first DCH to normalize and x N_{DCH}
+#					print(T_prev[n])
+#					print(np.sum(T[jval][n]))
+# 			if prev_step[i][j] != None: # normalize each dch_2 to the dch_1 intensities
+# 				T_prev = []
+# 				#T_norm = np.zeros(final_states[iV][j])
+# 				T_norm = []
+# 				for n in range(initial_states[i][j]):
+# 					for k in range(n_prev_step[i][j]):
+# 						#normalize with respect to each initial state of the previous step and sum
+# 						T_prev = np.loadtxt("outputs/amplitudes/T_"+str(prev_step[i][j])+"_spec_"+str(k)+".txt")
+# 						Norm = np.sum(T[jval][n]) / T_prev[n]
+# 						T_norm.append(T[jval][n] / Norm)
+# 					T[jval][n] = T_norm
 
-			GE = get_energies(ival, jval, "ground", e_type[i][j])
-			E_init[jval]  = get_energies(ival, jval, "init",  e_type[i][j], initial_index[i][j], final_states[i][j])
-			E_final[jval] = get_energies(ival, jval, "final", e_type[i][j], initial_index[i][j], final_states[i][j])
-	
+			E_init[jval]  = get_energies(ival, jval, "init",  e_type[i][j], initial_index[i][j], 
+							initial_states[i][j], final_states[i][j])
+			E_final[jval] = get_energies(ival, jval, "final",  e_type[i][j], initial_index[i][j], 
+	                        initial_states[i][j], final_states[i][j])
+
+# 			if prev_step[i][j] != None: # normalize each dch_2 to the dch_1 intensities
+# 				tmp = E_final[jval]
+# 				E_final[jval] = np.repeat(tmp, n_prev_step[i][j])
+
 			for n in range(initial_states[i][j]):
 				T_all[jval] = np.append([T_all[jval]], [T[jval][n]])
 				if E == "KE":
 					E_x[jval] = np.append([E_x[jval]], [(-E_final[jval] + E_init[jval][n])*27.2114])
 					#E_x[jval] = np.append([E_x[jval]], [E_final[jval]])
 				if E == "BE":
+					GE = get_energies(ival, jval, "ground", e_type[i][j])
 					E_x[jval] = np.append([E_x[jval]], [((-1 * GE) + E_final[jval])*27.2114])
 
 			E_x[jval] += E_shift[i][j]
 
-			ordered[jval]  = np.column_stack((np.repeat(roots, initial_states[i][j]), E_x[jval], T_all[jval]))
-			ordered[jval]  = ordered[jval][ordered[jval][:, 2].argsort()[::-1]]
-			np.savetxt("outputs/roots/max_roots_"+str(jval)+"_"+str(ival)+".txt", ordered[jval])
+			if prev_step[i][j] == None: # normalize each dch_2 to the dch_1 intensities	
+				ordered[jval]  = np.column_stack((np.repeat(roots, initial_states[i][j]), E_x[jval], T_all[jval]))
+				ordered[jval]  = ordered[jval][ordered[jval][:, 2].argsort()[::-1]]
+				np.savetxt("outputs/roots/max_roots_"+str(jval)+"_"+str(ival)+".txt", ordered[jval])
 		
 			spec_nofit[jval] = np.column_stack((E_x[jval], T_all[jval]))
 
@@ -91,7 +130,7 @@ def auger_run(steps, core_orb, initial_states, initial_index,
 		
 	return
 
-def get_energies(ival, jval, ground_init_final, e_type, inital_index=None, final_states=None):
+def get_energies(ival, jval, ground_init_final, e_type, inital_index=None, initial_states=None, final_states=None):
 	
 	log_file = open("inputs/"+str(jval)+"_"+str(ival)+".log", 'r')
 	lines = log_file.readlines()
@@ -113,24 +152,56 @@ def get_energies(ival, jval, ground_init_final, e_type, inital_index=None, final
 		if e_type == "rasscf":
 			E = np.loadtxt(c, usecols = 7)
 
+# 	if ground_init_final == "init":
+# 		if inital_index != None:
+# 			for i,val in enumerate(inital_index):
+# 				E_line = lines[E_line_index[1]+1+val]
+# 				c = StringIO(E_line)
+# 				if e_type == "raspt2":
+# 					E.append(np.loadtxt(c, usecols = 6))
+# 				if e_type == "rasscf":
+# 					E.append(np.loadtxt(c, usecols = 7))
+# 		if inital_index == None:
+# 			for i in range(initial_states):
+# 				E_line = lines[E_line_index[1]+1+i]
+# 				print("hey")
+# 				print(E_line)
+# 				c = StringIO(E_line)
+# 				if e_type == "raspt2":
+# 					E.append(np.loadtxt(c, usecols = 6))
+# 				if e_type == "rasscf":
+# 					E.append(np.loadtxt(c, usecols = 7))
+# 		E = np.array(E, ndmin=1)
 	if ground_init_final == "init":
 		for i,val in enumerate(inital_index):
 			E_line = lines[E_line_index[1]+1+val]
 			c = StringIO(E_line)
-			if e_type == "raspt2":
-				E.append(np.loadtxt(c, usecols = 6))
-			if e_type == "rasscf":
-				E.append(np.loadtxt(c, usecols = 7))
+			if i < 99:
+				if e_type == "raspt2":
+					E.append(np.loadtxt(c, usecols = 6))
+				if e_type == "rasscf":
+					E.append(np.loadtxt(c, usecols = 7))
+			if i >= 99: 
+				if e_type == "raspt2":
+					E.append(np.loadtxt(c, usecols = 5))
+				if e_type == "rasscf":
+					E.append(np.loadtxt(c, usecols = 6))
 		E = np.array(E, ndmin=1)
 
 	if ground_init_final == "final":
 		for i in range(final_states):
 			E_line = lines[E_line_index[2]+1+i]
 			c = StringIO(E_line)
-			if e_type == "raspt2":
-				E.append(np.loadtxt(c, usecols = 6))
-			if e_type == "rasscf":
-				E.append(np.loadtxt(c, usecols = 7))
+			if i < 99:
+				if e_type == "raspt2":
+					E.append(np.loadtxt(c, usecols = 6))
+				if e_type == "rasscf":
+					E.append(np.loadtxt(c, usecols = 7))
+			if i >= 99: 
+				if e_type == "raspt2":
+					E.append(np.loadtxt(c, usecols = 5))
+				if e_type == "rasscf":
+					E.append(np.loadtxt(c, usecols = 6))
 		E = np.array(E)
 	return E
 

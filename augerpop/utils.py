@@ -29,7 +29,7 @@ def linefit(x, y, fwhm, norm):
 		yfit = yfit / yfit.max()
 	return np.column_stack((xbase, yfit))
 
-def ci_vec_read(civec_file_name, final_init, CI, log_lines, n_states):
+def ci_vec_read(final_init, CI, log_lines, n_states):
 
 	CI_start_index = []
 	CI_end_index   = []
@@ -71,45 +71,54 @@ def ci_vec_read(civec_file_name, final_init, CI, log_lines, n_states):
 	return csf, civec, root_vec
 	
 
-def auger_calc(civec_file_name, mullpop_file_name, hole, step, n_init_states, n_final_states, 
-			   atom_col, min_mo_init, max_mo_init, min_mo_final, final_state_spin, 
-			   CI, diag, nprocs):
+def auger_calc(name, hole, n_init_states, n_final_states, 
+			   atom_col, n_core_init, n_core_final, final_state_spin, 
+			   CI, diag, mull_print_long, nprocs):
 
-	log_file = open("inputs/"+str(hole)+"_"+str(step)+".log", 'r')
+	log_file = open("inputs/"+str(hole)+"_"+str(name)+".log", 'r')
 	log_lines = log_file.readlines()
 
-	csf_init,  civec_init,  root_vec_init  = ci_vec_read(civec_file_name, "init",  CI, log_lines, n_init_states)
-	csf_final, civec_final, root_vec_final = ci_vec_read(civec_file_name, "final", CI, log_lines, n_final_states)
+	csf_init,  civec_init,  root_vec_init  = ci_vec_read("init",  CI, log_lines, n_init_states)
+	csf_final, civec_final, root_vec_final = ci_vec_read("final", CI, log_lines, n_final_states)
 	
-	mull_pop_file = open(mullpop_file_name, 'r')
-	lines = mull_pop_file.readlines()   
+# 	mull_pop_file = open(mullpop_file_name, 'r')
+# 	lines = mull_pop_file.readlines()   
 	pop_list = []
-	for index,line in enumerate(lines):
+	grid_it  = []
+	for index,line in enumerate(log_lines):
 		if "Charges per occupied MO" in line:
-			grid_it = index	
-	for index,line in enumerate(lines[grid_it:]):
+			grid_it.append(index)	
+	#print(grid_it)
+	for index,line in enumerate(log_lines[grid_it[0]:]):#just need to start from first grid_it calc
+		if mull_print_long == False:
 			if "Mulliken charges per centre" in line:#core-hole atom has to be in the first 12 in the xyz
-				total_mo_line = lines[grid_it+index+4]
+				total_mo_line = log_lines[grid_it[0]+index+4]
 				c = StringIO(total_mo_line)
 				pop_list.append(np.loadtxt(c, usecols = atom_col))
-	if step == "teoe":
+		if mull_print_long == True:
+			if "Total  " in line or "total  " in line:#only works for less than 12 atoms in the molecule
+				total_mo_line = log_lines[grid_it[0]+index]
+				c = StringIO(total_mo_line)
+				pop_list.append(np.loadtxt(c, usecols = atom_col))
+	if name == "teoe":
 		for i,val in enumerate(pop_list):
 			pop_list[i] = pop_list[i][0] + pop_list[i][1]
 	mull_pop  = np.hsplit(np.array(pop_list),n_init_states)
 
-	paramlist = list(itertools.product(range(n_init_states),range(len(csf_final))))
-	print(step)
-	print(hole)
+	#paramlist = list(itertools.product(range(n_init_states),range(len(csf_final))))
+	paramlist = list(itertools.product(range(n_init_states),range(n_final_states)))
+	#print(name)
+	#print(hole)
 	pool = multiprocessing.Pool(nprocs)
-	funcpool = partial(intensity_cal, n_init_states, csf_init, csf_final, min_mo_init, min_mo_init, min_mo_final,
-					   final_state_spin, mull_pop, civec_init, civec_final, diag)
+	funcpool = partial(intensity_cal, n_init_states, csf_init, csf_final, n_core_init,
+					   n_core_final, final_state_spin, mull_pop, civec_init, civec_final, diag)
 
 	I = pool.map(funcpool,paramlist)
 	I_dict = {}
 	index = 0
 	for n in range(n_init_states):
-		I_dict[n] = np.zeros(len(csf_final))
-		for i in range(len(csf_final)):
+		I_dict[n] = np.zeros(n_final_states)
+		for i in range(n_final_states):
 			I_dict[n][i] = I[index]
 			index += 1
 
@@ -117,8 +126,8 @@ def auger_calc(civec_file_name, mullpop_file_name, hole, step, n_init_states, n_
 
 	return I_dict, root_vec_final
 
-def intensity_cal(n_init_states, csf_init, csf_final, min_mo_init, max_mo_init, min_mo_final, 
-				  final_state_spin,mull_pop, civec_init, civec_final, DIAG, params):
+def intensity_cal(n_init_states, csf_init, csf_final, n_core_init, n_core_final,
+				final_state_spin, mull_pop, civec_init, civec_final, DIAG, params):
 
 	n = params[0]
 	i = params[1]
@@ -131,25 +140,25 @@ def intensity_cal(n_init_states, csf_init, csf_final, min_mo_init, max_mo_init, 
 			orbs_final = split(csf_final[i][j])
 			wv = []
 			count = 0
-			for k,orb_init in enumerate(orbs_init[min_mo_init:max_mo_init+1]):
-
-				if orb_init != orbs_final[k+min_mo_final]:
+			for k,orb_init in enumerate(orbs_init[n_core_init:]):
+				orb_final = orbs_final[k+n_core_final]
+				if orb_init != orb_final:
 		
-					if orb_init == "2" and (orbs_final[k+min_mo_final] == "u" or orbs_final[k+min_mo_final] == "d"):
+					if orb_init == "2" and (orb_final == "u" or orb_final == "d"):
 						wv.append(k)
 						count += 1
-					if orb_init == "2" and orbs_final[k+min_mo_final] == "0":
+					if orb_init == "2" and orb_final == "0":
 						wv.append(k) 
 						count =3
-					if (orb_init == "u" or orb_init == "d") and orbs_final[k+min_mo_final] == "0":
+					if (orb_init == "u" or orb_init == "d") and orb_final == "0":
 						wv.append(k)
 						count += 1
 					#if the number electrons increases then we ignore it
-					if (orb_init == "u" or orb_init == "d") and orbs_final[k+min_mo_final] == "2":
+					if (orb_init == "u" or orb_init == "d") and orb_final == "2":
 						count=5
-					if (orb_init == "0") and (orbs_final[k+min_mo_final] == "u" or orbs_final[k+min_mo_final] == "d"):
+					if (orb_init == "0") and (orb_final == "u" or orb_final == "d"):
 						count=5
-					if (orb_init == "0") and orbs_final[k+min_mo_final] == "2":
+					if (orb_init == "0") and orb_final == "2":
 						count=5
 				else:
 					continue
@@ -170,13 +179,13 @@ def intensity_cal(n_init_states, csf_init, csf_final, min_mo_init, max_mo_init, 
 			#not valid
 			if count == 5:
 				continue
-
 	if DIAG == True:	
 		for diag in range(len(t)):
+
 			Ini += (( np.absolute(t[diag])**2 ) * ( np.absolute(C[diag]) ** 2))
 # 			for offdiag in range(len(t)):
 # 				Ini += ((t[diag]*t[offdiag]) * (C[diag]*C[offdiag]))
-
+		
 		Ini =  (2 * np.pi * (Ini))
 	
 	if DIAG == False:
@@ -184,6 +193,5 @@ def intensity_cal(n_init_states, csf_init, csf_final, min_mo_init, max_mo_init, 
  			Ini += ( np.absolute(t[diag]) * np.absolute(C[diag]) )
 
 		Ini =  (2 * np.pi * (Ini**2))
-
 	return Ini
 
