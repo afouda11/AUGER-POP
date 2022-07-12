@@ -78,8 +78,6 @@ def auger_calc(name, hole, n_init_states, n_final_states,
 	csf_init,  civec_init,  root_vec_init  = ci_vec_read("init",  log_lines, n_init_states)
 	csf_final, civec_final, root_vec_final = ci_vec_read("final", log_lines, n_final_states)
 	
-# 	mull_pop_file = open(mullpop_file_name, 'r')
-# 	lines = mull_pop_file.readlines()   
 	pop_list = []
 	grid_it  = []
 	for index,line in enumerate(log_lines):
