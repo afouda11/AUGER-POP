@@ -1,3 +1,17 @@
+"""
+AUGER-POP
+Copyright (C) 2022  Adam E. A. Fouda
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software 
+Foundation, either Version 3 of the License, or (at your option) any later 
+version.
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+You should have received a copy of the GNU General Public License along with 
+this program.  If not, see <https://www.gnu.org/licenses/>.
+"""
+
 import numpy as np
 from io import StringIO
 import matplotlib
@@ -55,19 +69,9 @@ def auger_run(ar_options):
 			atom_col[i][j], n_core_init[i][j], n_core_final[i][j], final_state_spin[i][j], DIAG[i][j], 
 			mull_print_long[i][j], nprocs)    
 
-			for n in range(initial_states[i][j]):
 				np.savetxt("outputs/amplitudes/T_"+str(jval)+"_"+str(ival)+"_spec_"+str(n)+".txt",T[jval][n])
 			np.savetxt("outputs/roots/root_"+str(ival)+"_spec.txt",roots)
 
-# 			if prev_step[i][j] != none: # normalize each dch_2 to the dch_1 intensities	
-# 				t_prev = np.loadtxt("outputs/amplitudes/t_"+str(prev_step[i][j])+"_spec_"+str(0)+".txt")
-# 				for n in range(initial_states[i][j]):
-# #					print(n)
-# 					norm = np.sum(t[jval][n]) / t_prev[n]
-# 					t[jval][n] /= norm
-# 					t[jval][n] *= n_prev_step[i][j] #currently just uses the first dch to normalize and x n_{dch}
-#					print(t_prev[n])
-#					print(np.sum(t[jval][n]))
 			if prev_step[i][j] != None: # normalize each dch_2 to the dch_1 intensities	
 				T_prev = []
 				for k in range(n_prev_step[i][j]):
@@ -78,37 +82,17 @@ def auger_run(ar_options):
 						norm = np.sum(T[jval][n]) / T_prev[n]
 						T_norm[jval][k][n] = T[jval][n] / norm
 
-						#t[jval][n] *= n_prev_step[i][j] #currently just uses the first dch to normalize and x n_{dch}
-#					print(t_prev[n])
-#					print(np.sum(t[jval][n]))
-
-# 			if prev_step[i][j] != None: # normalize each dch_2 to the dch_1 intensities
-# 				T_prev = []
-# 				#T_norm = np.zeros(final_states[iV][j])
-# 				T_norm = []
-# 				for n in range(initial_states[i][j]):
-# 					for k in range(n_prev_step[i][j]):
-# 						#normalize with respect to each initial state of the previous step and sum
-# 						T_prev = np.loadtxt("outputs/amplitudes/T_"+str(prev_step[i][j])+"_spec_"+str(k)+".txt")
-# 						Norm = np.sum(T[jval][n]) / T_prev[n]
-# 						T_norm.append(T[jval][n] / Norm)
-# 					T[jval][n] = T_norm
 
 			E_init[jval]  = get_energies(ival, jval, "init",  e_type[i][j], initial_index[i][j], 
 							initial_states[i][j], final_states[i][j])
 			E_final[jval] = get_energies(ival, jval, "final",  e_type[i][j], initial_index[i][j], 
 	                        initial_states[i][j], final_states[i][j])
-
-# 			if prev_step[i][j] != None: # normalize each dch_2 to the dch_1 intensities
-# 				tmp = E_final[jval]
-# 				E_final[jval] = np.repeat(tmp, n_prev_step[i][j])
 			
 			if prev_step[i][j] == None:	
 				for n in range(initial_states[i][j]):
 					T_all[jval] = np.append([T_all[jval]], [T[jval][n]])
 					if E == "KE":
 						E_x[jval] = np.append([E_x[jval]], [(-E_final[jval] + E_init[jval][n])*27.2114])
-						#E_x[jval] = np.append([E_x[jval]], [E_final[jval]])
 					if E == "BE":
 						GE = get_energies(ival, jval, "ground", e_type[i][j])
 						E_x[jval] = np.append([E_x[jval]], [((-1 * GE) + E_final[jval])*27.2114])
@@ -119,7 +103,6 @@ def auger_run(ar_options):
 						T_all[jval] = np.append([T_all[jval]], [T_norm[jval][k][n]])
 						if E == "KE":
 							E_x[jval] = np.append([E_x[jval]], [(-E_final[jval] + E_init[jval][n])*27.2114])
-							#E_x[jval] = np.append([E_x[jval]], [E_final[jval]])
 						if E == "BE":
 							GE = get_energies(ival, jval, "ground", e_type[i][j])
 							E_x[jval] = np.append([E_x[jval]], [((-1 * GE) + E_final[jval])*27.2114])
@@ -181,26 +164,6 @@ def get_energies(ival, jval, ground_init_final, e_type, inital_index=None, initi
 			c = StringIO(E_line)
 			E = np.loadtxt(c, usecols = 7)
 
-# 	if ground_init_final == "init":
-# 		if inital_index != None:
-# 			for i,val in enumerate(inital_index):
-# 				E_line = lines[E_line_index[1]+1+val]
-# 				c = StringIO(E_line)
-# 				if e_type == "raspt2":
-# 					E.append(np.loadtxt(c, usecols = 6))
-# 				if e_type == "rasscf":
-# 					E.append(np.loadtxt(c, usecols = 7))
-# 		if inital_index == None:
-# 			for i in range(initial_states):
-# 				E_line = lines[E_line_index[1]+1+i]
-# 				print("hey")
-# 				print(E_line)
-# 				c = StringIO(E_line)
-# 				if e_type == "raspt2":
-# 					E.append(np.loadtxt(c, usecols = 6))
-# 				if e_type == "rasscf":
-# 					E.append(np.loadtxt(c, usecols = 7))
-# 		E = np.array(E, ndmin=1)
 	if ground_init_final == "init":
 		for i,val in enumerate(inital_index):
 			if i < 99:
