@@ -86,7 +86,7 @@ def auger_calc(name, hole, n_init_states, n_final_states,
 			   atom_col, n_core_init, n_core_final, final_state_spin, 
 			   diag, mull_print_long, nprocs):
 
-	log_file = open("inputs/"+str(hole)+"_"+str(name)+".log", 'r')
+	log_file = open("inputs/"+hole+"_"+name+".log", 'r')
 	log_lines = log_file.readlines()
 
 	csf_init,  civec_init,  root_vec_init  = ci_vec_read("init",  log_lines, n_init_states)
@@ -104,6 +104,7 @@ def auger_calc(name, hole, n_init_states, n_final_states,
 				total_mo_line = log_lines[grid_it[0]+index+4]
 				c = StringIO(total_mo_line)
 				pop_list.append(np.loadtxt(c, usecols = atom_col))
+				#print(total_mo_line)
 		if mull_print_long == True:
 			if "Total  " in line or "total  " in line:#only works for less than 12 atoms in the molecule
 				total_mo_line = log_lines[grid_it[0]+index]
@@ -192,14 +193,12 @@ def intensity_cal(n_init_states, csf_init, csf_final, n_core_init, n_core_final,
 		for diag in range(len(t)):
 
 			Ini += (( np.absolute(t[diag])**2 ) * ( np.absolute(C[diag]) ** 2))
-# 			for offdiag in range(len(t)):
-# 				Ini += ((t[diag]*t[offdiag]) * (C[diag]*C[offdiag]))
 		
 		Ini =  (2 * np.pi * (Ini))
 	
 	if DIAG == False:
 		for diag in range(len(t)):
- 			Ini += ( np.absolute(t[diag]) * np.absolute(C[diag]) )
+ 			Ini += ( t[diag] * C[diag] )
 
 		Ini =  (2 * np.pi * (Ini**2))
 	return Ini
